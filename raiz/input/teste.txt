@@ -1,0 +1,13 @@
+{
+    "SearchDocumentResult": {
+        "Items": [],
+        "Message": "A pesquisa não retornou nenhum registro .",
+        "Pagination": {
+            "Count": null,
+            "CurrentPage": null,
+            "PageLength": null,
+            "TotalPages": null
+        },
+        "Success": true
+    }
+}
