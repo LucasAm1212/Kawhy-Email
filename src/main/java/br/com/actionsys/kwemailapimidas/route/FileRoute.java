@@ -1,13 +1,16 @@
 package br.com.actionsys.kwemailapimidas.route;
 
-import br.com.actionsys.kwemailapimidas.entity.consulta.Items;
-import br.com.actionsys.kwemailapimidas.entity.consulta.ConsultaResponse;
+import br.com.actionsys.kwemailapimidas.entity.authenticate.AuthenticateRequest;
+import br.com.actionsys.kwemailapimidas.entity.authenticate.AuthenticateResponse;
+import br.com.actionsys.kwemailapimidas.entity.consulta.request.ConsultaRequest;
+import br.com.actionsys.kwemailapimidas.entity.consulta.request.SearchDocumentInput;
+import br.com.actionsys.kwemailapimidas.entity.consulta.response.ConsultaResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
-import org.apache.camel.component.gson.GsonDataFormat;
+import org.apache.camel.builder.ExpressionBuilder;
 import org.apache.camel.builder.RouteBuilder;
 import org.springframework.stereotype.Component;
+
+import java.util.Date;
 
 import static org.apache.camel.LoggingLevel.INFO;
 
@@ -15,50 +18,73 @@ import static org.apache.camel.LoggingLevel.INFO;
 @Slf4j
 public class FileRoute extends RouteBuilder {
 
-    //"C:\Users\LuizBastos\Documents\apache-camel\";
-    private String path = "/home/lucas/desenv/workspace-actionsys/kawhyEmailAPI-master/raiz/";
+    //private String path = "/home/lucas/desenv/workspace-actionsys/kawhyEmailAPI-master/raiz/";
 
     @Override
     public void configure() throws Exception {
 
-        Processor myprocess = exchange -> {
-            ConsultaResponse response = (ConsultaResponse) exchange.getIn().getBody();
-            log.info("response" + response);
-        };
 
-
-        from("file://" + path + "input?delete=true")
-                .log(INFO, this.log, "Serialized: ${body}")
-                .unmarshal().json(ConsultaResponse.class)
-                .process(myprocess)
-                .to("file://" + path + "output?flatten=true");
-
-                //java.io.File file = new java.io.File("/home/lucas/desenv/workspace-actionsys/kawhyEmailAPI-master/raiz/arquivo.xml");
-                //FileOutputStream in = new FileOutputStream(file) ;
-                //in.write();
-                //in.close();
-
-        //Login Autenticado
-        //from("timer://scheduler?period=100s")
-                //.to("direct:http");
-
-        /*AuthenticateRequest req = new AuthenticateRequest();
+        AuthenticateRequest req = new AuthenticateRequest();
 
         req.setLogin("ACTION");
         req.setPassword("6K5X3HYS");
 
-        from("direct:http")
+        from("timer://scheduler?period=300000s")
+                .to("direct:login");
+
+//        Login
+        from("direct:login")
                 .setBody().constant(req).marshal().json()
                 .setHeader("CamelHttpMethod").simple("POST")
                 .setHeader("Content-type").simple("application/json")
-                .to("https://ani-ws.midassolutions.com.br/actionsys/wcf/argo.wcf.wcfnix.svc/rest/AuthenticateRequest?throwExceptionOnFailure=false")
-                .process(exchange -> {
-                    exchange.getIn().getBody();
-                })
+                .to("https://ani-ws.midassolutions.com.br/actionsys/wcf/argo.wcf.wcfnix.svc/rest/AuthenticateRequest")
                 .unmarshal().json(AuthenticateResponse.class)
                 .process(exchange -> {
                     exchange.getIn().getBody();
                 })
-                .log(INFO, this.log,"${body}");*/
+                .log(INFO, this.log,"${body}")
+                .to("direct:consult");
+
+
+//        Consulta
+        from("direct:consult")
+            .transform(ExpressionBuilder.bodyExpression(o -> {
+                    AuthenticateResponse body = (AuthenticateResponse) o;
+
+                    ConsultaRequest request = ConsultaRequest.builder()
+                            .sessionId(body.getAuthenticateRequestResult())
+                            .searchDocumentInput(SearchDocumentInput.builder()
+                                    .itemId(0)
+                                    .occurrenceId(0)
+                                    .page(1)
+                                    .preOccurrenceId(0)
+                                    .startDate("/Date(1650229200000)/")
+                                    .endDate("/Date(1650229200000)/")
+                            .build())
+                    .build();
+
+                    return request;
+            }))
+            .marshal().json()
+                .process(exchange -> {
+                    exchange.getIn().getBody(String.class);
+                })
+            .setHeader("CamelHttpMethod").simple("POST")
+            .setHeader("Content-type").simple("application/json")
+            .to("https://ani-ws.midassolutions.com.br/actionsys/wcf/argo.wcf.wcfnix.svc/rest/searchdocument")
+            .unmarshal().json(ConsultaResponse.class)
+            .process(exchange -> {
+                exchange.getIn().getBody();
+            })
+        ;
+
+//        from("direct:consult")
+//            .from("file://" + path + "input?delete=false")
+//            .log(INFO, this.log, "Serialized: ${body}")
+//            .unmarshal(new JacksonDataFormat(ConsultaResponse.class))
+//            .process(exchange -> {
+//                ConsultaResponse response = (ConsultaResponse) exchange.getIn().getBody();
+//                log.info("response" + response);
+//            });
     }
 }
